@@ -238,11 +238,11 @@ class SSDisk:
         # Convolve beam if given
         if beam is not None:
             gaussbeam = gaussian2d(xx, yy, 1., 0., 0., 
-            beam[1] * dist / 2.35, beam[0] * dist / 2.35, beam[2], peak=True)
+            beam[1] / 2.35, beam[0] / 2.35, beam[2], peak=True)
             gaussbeam /= np.nansum(gaussbeam)
 
-            I_cube /= np.abs((xx[0,0] - xx[0,1])*(yy[1,0] - yy[0,0])) # per pixel to per arcsec^2
-            I_cube *= np.pi/(4.*np.log(2.)) * beam[0] * beam[1] # per arcsec^2 --> per beam
+            I_cube /= np.abs((xx[0,0] - xx[0,1])*(yy[1,0] - yy[0,0])) # per pixel to per au^2
+            I_cube *= np.pi/(4.*np.log(2.)) * beam[0] * beam[1] # per au^2 --> per beam
 
             # beam convolution
             I_cube = np.where(np.isnan(I_cube), 0., I_cube)
@@ -250,7 +250,8 @@ class SSDisk:
 
         # line broadening
         if linewidth is not None:
-            gaussbeam = np.exp(-( (v - self.vsys) /(2. * linewidth / 2.35))**2.)
+            gaussbeam = np.exp(- (v - self.vsys)**2. / linewidth**2.)
+            gaussbeam /= np.nansum(gaussbeam)
             I_cube = convolve(I_cube, np.array([[gaussbeam]]).T, mode='same')
 
         return I_cube
@@ -274,20 +275,21 @@ def main():
     # --------- main ----------
     # read fits file
     cube = Imfits(f)
-    cube.trim_data([-5., 5.,], [-5.,5.], [4.4, 10.4])
+    cube.trim_data([-5., 5.,], [-5.,5.])#, [4.4, 10.4])
     xx = cube.xx * 3600. * dist # in au
     yy = cube.yy * 3600. * dist # in au
     v = cube.vaxis # km/s
+    beam_au = [cube.beam[0] * dist, cube.beam[1] * dist, cube.beam[2]]
 
 
     # model
     model = SSDisk(Ic, rc, beta, gamma, inc, pa, ms, vsys)
-    modelcube = model.build_cube(xx, yy, v, cube.beam, 0.5, dist)
+    modelcube = model.build_cube(xx, yy, v, beam_au, 0.07, dist)
     vmin, vmax = np.nanmin(modelcube)*0.5, np.nanmax(modelcube)*0.5
 
 
     # plot
-    canvas = AstroCanvas((4,7),(0,0), imagegrid=True)
+    canvas = AstroCanvas((7,10),(0,0), imagegrid=True)
     canvas.channelmaps(cube, contour=True, color=False,
         clevels = np.array([-3,3.,6.,9.,12.,15])*5e-3)
     for i, im in enumerate(modelcube):
@@ -299,6 +301,12 @@ def main():
             break
 
     plt.show()
+
+
+    cube_out = cube.copy()
+    nv, ny, nx = modelcube.shape
+    cube_out.data = modelcube.reshape(1, nv, ny, nx)
+    cube_out.writeout('model_old.fits', overwrite= True)
     # -------------------------
 
 
