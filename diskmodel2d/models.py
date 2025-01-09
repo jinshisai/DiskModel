@@ -163,9 +163,15 @@ class SSDisk:
     pa: float = 0.
     ms: float = 0.
     vsys: float = 0.
+    dv: float = 0.
+    pdv: float = 0.
+
+    __inc_rad: float = np.radians(inc)
+    __pa_rad: float = np.radians(pa)
+
 
     def set_params(self, Ic = 0, rc = 0, beta = 0, gamma = 0, 
-        inc = 0, pa = 0, ms = 0, vsys = 0):
+        inc = 0, pa = 0, ms = 0, vsys = 0, dv = 0, pdv = 0.):
         '''
 
         Parameters
@@ -187,41 +193,38 @@ class SSDisk:
         self.pa = pa
         self.ms = ms
         self.vsys = vsys
+        self.dv = dv
+        self.pdv = pdv
+
+        self.__inc_rad = np.radians(inc)
+        self.__pa_rad = np.radians(pa)
 
 
     def get_paramkeys(self):
-        return list(self.__annotations__.keys())
+        paramkeys = list(self.__annotations__.keys())
+        paramkeys = [i for i in paramkeys if i[0] != '_']
+        return paramkeys
 
 
-    def build(self, xx_sky, yy_sky):
+    def build(self, r, phi):
         '''
         Build a model given sky coordinates and return a info for making a image cube.
         '''
-        # parameters
-        _inc_rad = np.radians(self.inc)
-        _pa_rad = np.radians(self.pa)
-
-        # deprojection from sky to disk coordinates
-        x, y = xx_sky.ravel(), yy_sky.ravel()
-        # rotate by pa
-        xp, yp = rotate2d(x, y, _pa_rad + 0.5 * np.pi)
-        yp /= np.cos(_inc_rad)
-
-        # local coordinates
-        r = np.sqrt(xp * xp + yp * yp) # radius
-        th = np.arctan2(yp, xp) # azimuthal angle (rad)
-
+        # intensity
+        I_int = ssdisk(r, self.Ic, self.rc, self.gamma, self.beta)
+        # velocity
         # take y-axis as the line of sight
         vlos = vkep(r * auTOcm, self.ms * Msun) \
-        * np.cos(th) * np.sin(_inc_rad) * 1.e-5 + self.vsys # cm/s --> km/s
-        I_int = ssdisk(r, self.Ic, self.rc, self.gamma, self.beta)
+        * np.cos(phi) * np.sin(self.__inc_rad) * 1.e-5 + self.vsys # cm/s --> km/s
 
-        return I_int.reshape(xx_sky.shape), vlos.reshape(xx_sky.shape)
+        dv = self.dv * (r / 1.)**(-self.pdv)
+
+        return I_int, vlos, dv
 
 
     def build_cube(self, xx, yy, v, beam = None, linewidth = 0., dist = 140.):
         # get intensity and velocity fields
-        I_int, vlos = self.build(xx, yy)
+        I_int, vlos, dv = self.build(xx, yy)
         
         # vaxes
         ny, nx = xx.shape
