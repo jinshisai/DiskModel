@@ -11,7 +11,7 @@ from imfits.drawmaps import AstroCanvas
 def main():
     # --------- input ---------
     # model params
-    Ic, rc, beta, gamma = [1., 600., 1.5, 0.]
+    Ic, rc, beta, gamma = [1., 600., 1.5, 1.]
     inc = 70.
     pa = 69.
     ms = 1.6
